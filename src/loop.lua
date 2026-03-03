@@ -1,0 +1,168 @@
+-- src/loop.lua
+local component  = require("component")
+local event      = require("event")
+local term       = require("term")
+local os         = require("os")
+local HttpClient = require("lib/httpclient")
+local JsonEncode = require("lib/jsonEncode")
+local Logger     = require("lib/logger")
+
+local Loop = {}
+local conf
+local me
+local capacitor
+
+-- Sensor constants for Lapotronic Supercapacitor
+local SENSOR_EU_STORE    = 2
+local SENSOR_WIRELESS_EU = 23
+
+function Loop.init(config)
+    conf = config
+
+    -- ME interface
+    local meAddr = conf:get("meAddress")
+    if meAddr and meAddr ~= "" then
+        me = component.proxy(meAddr)
+    end
+    if not me then
+        -- Fallback: try the first available ME interface
+        local ok, proxy = pcall(function() return component.me_interface end)
+        if ok and proxy then me = proxy end
+    end
+    if not me then
+        error("Cannot access ME component. Check meAddress in config.")
+    end
+
+    -- Capacitor (optional)
+    if conf:get("isCapacitorActive") then
+        local capAddr = conf:get("capacitorAddress")
+        if capAddr and capAddr ~= "" then
+            capacitor = component.proxy(capAddr)
+        end
+        if not capacitor then
+            print("Warning: capacitor not found; continuing without energy data.")
+            conf:set("isCapacitorActive", false)
+        end
+    end
+end
+
+local function getMeData()
+    local result = {}
+
+    local ok, itemsRaw = pcall(function() return me.getItemsInNetwork() end)
+    if ok and itemsRaw then
+        for _, item in ipairs(itemsRaw) do
+            table.insert(result, {
+                type  = "item",
+                label = item.label or "N/A",
+                name  = item.name  or "unknown",
+                count = item.size  or 0,
+            })
+        end
+    end
+
+    local ok2, fluidsRaw = pcall(function() return me.getFluidsInNetwork() end)
+    if ok2 and fluidsRaw then
+        for _, fluid in ipairs(fluidsRaw) do
+            table.insert(result, {
+                type   = "fluid",
+                label  = fluid.label  or "N/A",
+                name   = fluid.name   or "unknown",
+                amount = fluid.amount or 0,
+            })
+        end
+    end
+
+    return result
+end
+
+local function getEnergyData()
+    if not capacitor then return nil end
+
+    local sensorIndex = conf:get("isCapacitorWireless") and SENSOR_WIRELESS_EU or SENSOR_EU_STORE
+
+    local ok, sensorInfo = pcall(function() return capacitor.getSensorInformation() end)
+    if not ok or not sensorInfo or not sensorInfo[sensorIndex] then
+        return nil
+    end
+
+    local clean  = sensorInfo[sensorIndex]:gsub(",", "")
+    local energy = tonumber(clean:match("(%d+)")) or 0
+
+    return {
+        type  = "energy",
+        label = "Lapotronic Supercapacitor",
+        count = energy,
+    }
+end
+
+-- Display helpers
+local function printData(data)
+    for _, entry in ipairs(data) do
+        if entry.type == "item" then
+            print(string.format("Item:   %-40s x%d", entry.label, entry.count))
+        elseif entry.type == "fluid" then
+            print(string.format("Fluid:  %-40s %d mB", entry.label, entry.amount))
+        elseif entry.type == "energy" then
+            print(string.format("Energy: %-40s %d EU", entry.label, entry.count))
+        end
+    end
+end
+
+-- Main loop
+function Loop.run()
+    local url      = conf:get("serverUrl")
+    local mondoId  = conf:get("mondoId")
+    local interval = 10  -- seconds between polls
+
+    while true do
+        term.clear()
+        term.setCursor(1, 1)
+        print(os.date("[%H:%M:%S] Polling ME network..."))
+
+        local ok, err = pcall(function()
+            local data   = getMeData()
+            local energy = getEnergyData()
+            if energy then table.insert(data, energy) end
+
+            printData(data)
+
+            local payload = {
+                mondo = mondoId,
+                items = data,
+                ts    = os.time() * 1000,
+            }
+
+            local response, reqErr = HttpClient.post(url, JsonEncode.encode(payload))
+            if response then
+                print("\nServer: " .. tostring(response))
+            else
+                print("\nSend error: " .. tostring(reqErr))
+                Logger.error("POST failed: " .. tostring(reqErr))
+            end
+        end)
+
+        if not ok then
+            print("Loop error: " .. tostring(err))
+            Logger.error("Loop error: " .. tostring(err))
+        end
+
+        print("\n[Press Q to quit]")
+
+        -- q to quit
+        local deadline = os.clock() + interval
+        repeat
+            local remaining = deadline - os.clock()
+            if remaining <= 0 then break end
+            local ev, _, char = event.pull(remaining, "key_down")
+            if ev == "key_down" and char == string.byte("q") then
+                term.clear()
+                term.setCursor(1, 1)
+                print("Exiting ME monitor. Goodbye!")
+                return
+            end
+        until os.clock() >= deadline
+    end
+end
+
+return Loop
