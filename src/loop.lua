@@ -1,5 +1,6 @@
 -- src/loop.lua
 local component  = require("component")
+local computer   = require("computer")
 local event      = require("event")
 local term       = require("term")
 local os         = require("os")
@@ -149,10 +150,9 @@ function Loop.run()
 
         print("\n[Press Q to quit]")
 
-        -- q to quit
-        local deadline = os.clock() + interval
+        local deadline = computer.uptime() + interval
         repeat
-            local remaining = deadline - os.clock()
+            local remaining = deadline - computer.uptime()
             if remaining <= 0 then break end
             local ev, _, char = event.pull(remaining, "key_down")
             if ev == "key_down" and char == string.byte("q") then
@@ -161,7 +161,7 @@ function Loop.run()
                 print("Exiting ME monitor. Goodbye!")
                 return
             end
-        until os.clock() >= deadline
+        until computer.uptime() >= deadline
     end
 end
 
