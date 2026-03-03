@@ -1,4 +1,5 @@
 local component = require("component")
+---@diagnostic disable-next-line: undefined-field
 local internet = component.internet
 local os = require("os")
 

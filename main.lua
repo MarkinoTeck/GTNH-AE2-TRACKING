@@ -21,7 +21,7 @@ local DEFAULTS = {
     serverUrl          = "",
 }
 
-local conf = Config.new("/etc/me_monitor.cfg", DEFAULTS)
+local conf = Config.new("/etc/config.cfg", DEFAULTS)
 
 -- init configs
 Setup.run(conf)
