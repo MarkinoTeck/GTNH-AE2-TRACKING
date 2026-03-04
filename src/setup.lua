@@ -45,7 +45,7 @@ function Setup.run(conf)
 
     -- ME component address
     if not conf:get("meAddress") or conf:get("meAddress") == "" then
-        local addr = prompt("Enter ME Interface component address: ")
+        local addr = prompt("Enter ME Interface or ME controller component address: ")
         conf:set("meAddress", addr)
         changed = true
     end
@@ -100,6 +100,7 @@ function Setup.run(conf)
     end
     print("Server URL:      " .. tostring(conf:get("serverUrl")))
     print("-----------------------------")
+    os.sleep(5)
 end
 
 return Setup

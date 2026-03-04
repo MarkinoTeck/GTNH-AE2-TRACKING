@@ -12,6 +12,7 @@ local Loop = {}
 local conf
 local me
 local capacitor
+local tpsCard
 
 -- Sensor constants for Lapotronic Supercapacitor
 local SENSOR_EU_STORE    = 2
@@ -20,7 +21,7 @@ local SENSOR_WIRELESS_EU = 23
 function Loop.init(config)
     conf = config
 
-    -- ME interface
+    -- ME interface/controller
     local meAddr = conf:get("meAddress")
     if meAddr and meAddr ~= "" then
         me = component.proxy(meAddr)
@@ -43,7 +44,17 @@ function Loop.init(config)
         if not capacitor then
             print("Warning: capacitor not found; continuing without energy data.")
             conf:set("isCapacitorActive", false)
+            os.sleep(5)
         end
+    end
+
+    -- TPS card (optional) — auto-detect
+    local tpsOk, tpsProxy = pcall(function() return component.tps_card end)
+    if tpsOk and tpsProxy then
+        tpsCard = tpsProxy
+        print("TPS card detected.")
+    else
+        print("No TPS card found; continuing without TPS data.")
     end
 end
 
@@ -97,6 +108,34 @@ local function getEnergyData()
     }
 end
 
+local function getTpsData()
+    if not tpsCard then return nil end
+
+    local ok, overallTickTime = pcall(function() return tpsCard.getOverallTickTime() end)
+    if not ok then return nil end
+
+    local tps = tpsCard.convertTickTimeIntoTps(overallTickTime)
+
+    return {
+        type             = "tps",
+        label            = "Server TPS",
+        overallTps       = tps,
+        overallTickMs    = overallTickTime,
+        overallChunks    = (function()
+            local c, v = pcall(function() return tpsCard.getOverallChunksLoaded() end)
+            return c and v or nil
+        end)(),
+        overallEntities  = (function()
+            local c, v = pcall(function() return tpsCard.getOverallEntitiesLoaded() end)
+            return c and v or nil
+        end)(),
+        overallTEs       = (function()
+            local c, v = pcall(function() return tpsCard.getOverallTileEntitiesLoaded() end)
+            return c and v or nil
+        end)(),
+    }
+end
+
 -- Display helpers
 local function printData(data)
     for _, entry in ipairs(data) do
@@ -110,6 +149,17 @@ local function printData(data)
     end
 end
 
+local function printTps(tpsData)
+    if not tpsData then return end
+    print(string.format(
+        "TPS:    %-40s %.2f TPS  (%.2f ms)",
+        tpsData.label, tpsData.overallTps, tpsData.overallTickMs
+    ))
+    if tpsData.overallChunks   then print(string.format("        Chunks loaded:   %d", tpsData.overallChunks))   end
+    if tpsData.overallEntities then print(string.format("        Entities loaded: %d", tpsData.overallEntities)) end
+    if tpsData.overallTEs      then print(string.format("        TEs loaded:      %d", tpsData.overallTEs))      end
+end
+
 -- Main loop
 function Loop.run()
     local url      = conf:get("serverUrl")
@@ -119,7 +169,6 @@ function Loop.run()
     while true do
         term.clear()
         term.setCursor(1, 1)
-        print(os.date("[%H:%M:%S] Polling ME network..."))
 
         local ok, err = pcall(function()
             local data   = getMeData()
@@ -128,10 +177,15 @@ function Loop.run()
 
             printData(data)
 
+            local tpsData = getTpsData()
+            printTps(tpsData)
+
             local payload = {
                 mondo = mondoId,
                 items = data,
+                tps   = tpsData,
                 ts    = os.time() * 1000,
+                uts    = computer.uptime() * 1000,
             }
 
             local response, reqErr = HttpClient.post(url, JsonEncode.encode(payload))
