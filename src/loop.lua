@@ -132,6 +132,17 @@ local function getDtpfData()
 
     local raw = sensorInfo[SENSOR_DTPF_EFF]
     print(raw)
+    local raw = sensorInfo[9]
+    print(raw)
+    local raw = sensorInfo[8]
+    print(raw)
+    local raw = sensorInfo[7]
+    print(raw)
+    local raw = sensorInfo[6]
+    print(raw)
+
+    local raw = sensorInfo[11]
+    print(raw)
 
     local ticks    = tonumber(raw:match("Ticks run:%s*([%d%.]+)"))    or 0
     local discount = tonumber(raw:match("Fuel Discount:%s*([%d%.]+)")) or 0
