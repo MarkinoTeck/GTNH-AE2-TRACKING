@@ -130,7 +130,8 @@ local function getDtpfData()
     local ok, sensorInfo = pcall(function() return dtpf.getSensorInformation() end)
     if not ok or not sensorInfo or not sensorInfo[SENSOR_DTPF_EFF] then return nil end
 
-    local raw = sensorInfo[SENSOR_DTPF_EFF]  -- e.g. "Ticks run: 123, Fuel Discount: 45% (Extra catalyst use: 6L)"
+    local raw = sensorInfo[SENSOR_DTPF_EFF]
+    print(raw)
 
     local ticks    = tonumber(raw:match("Ticks run:%s*([%d%.]+)"))    or 0
     local discount = tonumber(raw:match("Fuel Discount:%s*([%d%.]+)")) or 0
