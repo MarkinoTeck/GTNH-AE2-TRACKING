@@ -54,7 +54,7 @@ function Loop.init(config)
     -- DTPF (optional)
     if conf:get("isDTPFactive") then
         local dtpfAddr = conf:get("DTPFAddress")
-        if dtpfAddr and capAddr ~= "" then
+        if dtpfAddr and dtpfAddr ~= "" then
             dtpf = component.proxy(dtpfAddr)
         end
         if not dtpf then
