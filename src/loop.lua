@@ -18,6 +18,9 @@ local tpsCard
 local SENSOR_EU_STORE    = 2
 local SENSOR_WIRELESS_EU = 23
 
+-- Sensor constants for DTPF
+local SENSOR_DTPF_EFF = 10
+
 function Loop.init(config)
     conf = config
 
@@ -44,6 +47,19 @@ function Loop.init(config)
         if not capacitor then
             print("Warning: capacitor not found; continuing without energy data.")
             conf:set("isCapacitorActive", false)
+            os.sleep(5)
+        end
+    end
+
+    -- DTPF (optional)
+    if conf:get("isDTPFactive") then
+        local dtpfAddr = conf:get("DTPFAddress")
+        if dtpfAddr and capAddr ~= "" then
+            dtpf = component.proxy(dtpfAddr)
+        end
+        if not dtpf then
+            print("Warning: dtpf not found; continuing without dtpf data.")
+            conf:set("isDTPFactive", false)
             os.sleep(5)
         end
     end
@@ -108,6 +124,37 @@ local function getEnergyData()
     }
 end
 
+local function getDtpfData()
+    if not dtpf then return nil end
+
+    local ok, sensorInfo = pcall(function() return dtpf.getSensorInformation() end)
+    if not ok or not sensorInfo or not sensorInfo[SENSOR_DTPF_EFF] then return nil end
+
+    local raw = sensorInfo[SENSOR_DTPF_EFF]  -- e.g. "Ticks run: 123, Fuel Discount: 45% (Extra catalyst use: 6L)"
+
+    local ticks    = tonumber(raw:match("Ticks run:%s*([%d%.]+)"))    or 0
+    local discount = tonumber(raw:match("Fuel Discount:%s*([%d%.]+)")) or 0
+    local catalyst = tonumber(raw:match("Extra catalyst use:%s*([%d%.]+)")) or 0
+
+    return {
+        {
+            type  = "dtpf_ticks",
+            label = "DTPF Ticks Run",
+            count = ticks,
+        },
+        {
+            type  = "dtpf_%",
+            label = "DTPF Fuel Discount %",
+            count = discount,
+        },
+        {
+            type  = "dtpf_catalyst",
+            label = "DTPF Extra Catalyst (L)",
+            count = catalyst,
+        },
+    }
+end
+
 local function getTpsData()
     if not tpsCard then return nil end
 
@@ -160,6 +207,13 @@ local function printTps(tpsData)
     if tpsData.overallTEs      then print(string.format("        TEs loaded:      %d", tpsData.overallTEs))      end
 end
 
+local function printDtpf(dtpfData)
+    if not dtpfData then return end
+    for _, entry in ipairs(dtpfData) do
+        print(string.format("DTPF:   %-40s %g", entry.label, entry.count))
+    end
+end
+
 -- Main loop
 function Loop.run()
     local url      = conf:get("serverUrl")
@@ -175,10 +229,18 @@ function Loop.run()
             local energy = getEnergyData()
             if energy then table.insert(data, energy) end
 
+            local dtpfData = getDtpfData()
+            if dtpfData then
+                for _, entry in ipairs(dtpfData) do
+                    table.insert(data, entry)
+                end
+            end
+
             printData(data)
 
             local tpsData = getTpsData()
             printTps(tpsData)
+            printDtpf(dtpfData)
 
             local payload = {
                 mondo = mondoId,

@@ -73,6 +73,22 @@ function Setup.run(conf)
         end
     end
 
+    -- Dtpf
+    local capActive = conf:get("isDTPFactive")
+    if capActive == nil then
+        capActive = promptBool("Enable dtpf monitoring?", true)
+        conf:set("isDTPFactive", capActive)
+        changed = true
+    end
+
+    if capActive then
+        if not conf:get("DTPFAddress") or conf:get("DTPFAddress") == "" then
+            local addr = prompt("Enter dtpf component address: ")
+            conf:set("DTPFAddress", addr)
+            changed = true
+        end
+    end
+
     -- Server URL
     if not conf:get("serverUrl") or conf:get("serverUrl") == "" then
         local url = prompt("Enter server URL [leave blank for default]: ", 0)
@@ -97,6 +113,10 @@ function Setup.run(conf)
     if conf:get("isCapacitorActive") then
         print("  Address:       " .. tostring(conf:get("capacitorAddress")))
         print("  Wireless:      " .. tostring(conf:get("isCapacitorWireless")))
+    end
+    print("DTPF:            " .. tostring(conf:get("isDTPFactive")))
+    if conf:get("isDTPFactive") then
+        print("  Address:       " .. tostring(conf:get("DTPFAddress")))
     end
     print("Server URL:      " .. tostring(conf:get("serverUrl")))
     print("-----------------------------")
