@@ -15,11 +15,11 @@ local capacitor
 local tpsCard
 
 -- Sensor constants for Lapotronic Supercapacitor
-local SENSOR_EU_STORE    = 2
+local SENSOR_EU_STORE = 2
 local SENSOR_WIRELESS_EU = 23
 
 -- Sensor constants for DTPF
-local SENSOR_DTPF_EFF = 10
+local SENSOR_DTPF_EFF = 7
 
 function Loop.init(config)
     conf = config
@@ -131,18 +131,10 @@ local function getDtpfData()
     if not ok or not sensorInfo or not sensorInfo[SENSOR_DTPF_EFF] then return nil end
 
     local raw = sensorInfo[SENSOR_DTPF_EFF]
-    print(raw)
-    local raw = sensorInfo[9]
-    print(raw)
-    local raw = sensorInfo[8]
-    print(raw)
-    local raw = sensorInfo[7]
-    print(raw)
-    local raw = sensorInfo[6]
-    print(raw)
-
-    local raw = sensorInfo[11]
-    print(raw)
+    -- Strip Minecraft color codes (§ followed by any char)
+    raw = raw:gsub("%§.", "")
+    -- Remove thousands separators
+    raw = raw:gsub(",(%d)", "%1")
 
     local ticks    = tonumber(raw:match("Ticks run:%s*([%d%.]+)"))    or 0
     local discount = tonumber(raw:match("Fuel Discount:%s*([%d%.]+)")) or 0
